@@ -2,7 +2,7 @@
 # Time    : 2022/12/31 17:53
 # Author  : Yichen Lu
 
-from typing import Dict
+from typing import Dict, Union, List, Tuple
 import itertools
 import math
 from collections import defaultdict
@@ -20,8 +20,8 @@ def iter_around(h, w, height=HEIGHT, width=WIDTH, around_type=None, context=None
     iter around single point
     :param h: h
     :param w: w
-    :param height: height of game
-    :param width: width of game
+    :param height: height of minesweeper
+    :param width: width of minesweeper
     :param around_type: limit type of points around
     :param context: interact.Context
     :return: positions around
@@ -39,8 +39,8 @@ def iter_arounds(positions, height=HEIGHT, width=WIDTH, around_type=None, contex
     """
     iter around a group of points
     :param positions: position of such group of points
-    :param height: height of game
-    :param width: width of game
+    :param height: height of minesweeper
+    :param width: width of minesweeper
     :param around_type: type of around points
     :param context: interact.Context
     :param blocks: blocks
@@ -90,8 +90,8 @@ def look_around(h, w, context, pseudo_context=None) -> Dict:
     #       "remains" -> number of remain mines
     """
 
-    if context.front_side.get(h, w) in [UNSEEN, FLAG]:
-        raise RuntimeError
+    # if context.front_side.get(h, w) in [UNSEEN, FLAG]:
+    #     raise RuntimeError
 
     around = defaultdict(list)
     for around_h, around_w in iter_around(h, w):
@@ -108,7 +108,9 @@ def look_around(h, w, context, pseudo_context=None) -> Dict:
         elif isinstance(element, int):
             around['hints'].append((around_h, around_w))
     around["self"] = context.front_side.get(h, w)
-    around["remains"] = context.front_side.get(h, w) - len(around['flags'])
+    if context.front_side.type(h, w) == "HINT":
+        around["remains"] = context.front_side.get(h, w) - len(around['flags'])
+
     return around
 
 
@@ -117,3 +119,20 @@ def iter_incomplete_hints(context):
         around = look_around(hint_h, hint_w, context)
         if around["unseens"]:
             yield hint_h, hint_w
+
+
+def entropy(distribution: Union[int, List]):
+    if isinstance(distribution, int):
+        assert distribution >= 1
+        return math.log(distribution, base=math.e)
+    assert 0.999 <= sum(distribution) <= 1.001
+    return sum([-math.log(p, base=math.e) for p in distribution]) / len(distribution)
+
+
+def information_gain(distribution_a: Union[int, List], distribution_b: Union[int, List]):
+    """
+    :param distribution_a: current distribution
+    :param distribution_b: original distribution
+    :return: information gain
+    """
+    return entropy(distribution_b) - entropy(distribution_a)

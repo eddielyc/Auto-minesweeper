@@ -7,8 +7,8 @@ import time
 import pickle
 from pathlib import Path
 import utils
-from typing import Union, List
-from game import FrontSide, BackSide
+from typing import Union, Iterable
+from minesweeper import FrontSide, BackSide
 from global_variables import *
 from collections import deque
 
@@ -18,6 +18,14 @@ class Operation(object):
         self.h = h
         self.w = w
         self.op = op
+
+    def __hash__(self):
+        return hash((self.h, self.w, self.op))
+
+    def __eq__(self, other):
+        if not isinstance(other, type(self)):
+            return RuntimeError
+        return hash(self) == hash(other)
 
 
 class Context(object):
@@ -45,12 +53,12 @@ class Context(object):
             print("Back Side: ")
             print(back_side_s)
         if self.is_over:
-            print("BOOM")
+            print("OVER")
         elif self.is_win:
             print("Congratulations!")
 
-    def interact(self, ops: Union[Operation, List]):
-        ops = ops if isinstance(ops, list) else [ops]
+    def interact(self, ops: Union[Operation, Iterable]):
+        ops = ops if isinstance(ops, Iterable) else [ops]
         for op in ops:
             if op.op == "step":
                 signal = self.step(op.h, op.w)
@@ -59,9 +67,9 @@ class Context(object):
             else:
                 raise ValueError(f"Invalid op type: {op.op}.")
 
-            if signal == "BOOM":
+            if signal == "OVER":
                 self.is_over = True
-                return "BOOM"
+                return "OVER"
             elif signal == "WIN":
                 self.is_win = True
                 return "WIN"
@@ -76,7 +84,7 @@ class Context(object):
             return "OK"
         elif self.back_side.get(h, w) == MINE:
             self.uncover(h, w)
-            return "BOOM"
+            return "OVER"
         else:
             self.step_bfs(h, w)
             if self.front_side.remains == len(self.front_side.unseens) or self.front_side.remains == 0:

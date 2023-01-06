@@ -14,6 +14,8 @@ FLAG = "🚩"
 MINE = "💀"
 TAB_SIZE = 3
 VERSION = "new"
+LEVEL3_THESHOLD = 10
+LEVEL4_THESHOLD = 10
 
 CH_MAP = {
     "0": "0️⃣",

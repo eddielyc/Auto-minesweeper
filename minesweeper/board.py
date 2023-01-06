@@ -58,6 +58,24 @@ class FrontSide(Board):
     def remains(self):
         return MINES - len(self.flags)
 
+    def update_from_board(self):
+        """
+        In context, front side is updated by context instance, and in bot environment, back side is unknown. Thus,
+        front side information must be updated with its board by itself.
+        """
+        self.hints, self.unseens, self.flags = set(), set(), set()
+
+        for h in range(self.height):
+            for w in range(self.width):
+                if self.type(h, w) == "HINT":
+                    self.hints.add((h, w))
+                elif self.type(h, w) == FLAG:
+                    self.flags.add((h, w))
+                elif self.type(h, w) == UNSEEN:
+                    self.unseens.add((h, w))
+                else:
+                    raise RuntimeError
+
 
 class BackSide(Board):
     def __init__(self, height, width, mines):

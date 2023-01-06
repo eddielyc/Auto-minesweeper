@@ -6,7 +6,7 @@
 from typing import Dict, Set
 import random
 from collections import deque
-from game import board, interact
+from minesweeper import board, interact
 from global_variables import *
 import itertools
 import utils
@@ -19,6 +19,7 @@ class PseudoContext(object):
         self.visited = set()
         self.pseudo_flags = set()
         self.pseudo_hints = set()
+        self.attempts_chain = []
 
     def update(self, attempt: Attempt):
         assert self.pseudo_flags.isdisjoint(attempt.pseudo_flags) and \
@@ -28,6 +29,7 @@ class PseudoContext(object):
         self.visited.add((attempt.h, attempt.w))
         self.pseudo_flags.update(attempt.pseudo_flags)
         self.pseudo_hints.update(attempt.pseudo_hints)
+        self.attempts_chain.append(hash(attempt))
 
     def undo(self, attempt: Attempt):
         assert self.pseudo_flags.issuperset(attempt.pseudo_flags) and \
@@ -37,33 +39,36 @@ class PseudoContext(object):
         self.visited.remove((attempt.h, attempt.w))
         self.pseudo_flags.difference_update(attempt.pseudo_flags)
         self.pseudo_hints.difference_update(attempt.pseudo_hints)
+        assert self.attempts_chain and self.attempts_chain[-1] == hash(attempt)
+        self.attempts_chain.pop()
 
 
 class Engine(object):
     def __init__(self, context):
         self.context = context
 
-    def what_next(self):
+    def what_next(self, mode="least"):
+        assert mode in ["least", "most"]
         if len(self.context.front_side.hints) == 0:
             return self.random_step()
-        ops = []
+        ops = set()
 
         # --------- inference with level 1 (single hop) ---------
         for hint_h, hint_w in self.context.front_side.hints:
             conclusion = self.inference(level=1, h=hint_h, w=hint_w)
-            ops.extend([interact.Operation(h, w, "step") for h, w in conclusion["hints"]])
-            ops.extend([interact.Operation(h, w, "flag") for h, w in conclusion["flags"]])
-            if ops:
+            ops.update({interact.Operation(h, w, "step") for h, w in conclusion["hints"]})
+            ops.update({interact.Operation(h, w, "flag") for h, w in conclusion["flags"]})
+            if ops and mode == "least":
                 return ops
 
-        # no solution in all first hops
+        # "most" mode or no solution in all first hops
         # --------- inference with level 2 (double hop) ---------
         probs = dict()
         for hint_h, hint_w in self.context.front_side.hints:
             conclusion = self.inference(level=2, h=hint_h, w=hint_w)
-            ops.extend([interact.Operation(h, w, "step") for h, w in conclusion["hints"]])
-            ops.extend([interact.Operation(h, w, "flag") for h, w in conclusion["flags"]])
-            if ops:
+            ops.update({interact.Operation(h, w, "step") for h, w in conclusion["hints"]})
+            ops.update({interact.Operation(h, w, "flag") for h, w in conclusion["flags"]})
+            if ops and mode == "least":
                 return ops
             else:
                 for position, prob in conclusion["probs"].items():
@@ -73,12 +78,15 @@ class Engine(object):
                         else:
                             probs[position] = prob
 
+        if mode == "most" and ops:
+            return ops
+
         # no solution in all double hops
         # --------- inference with level 3 (multiple hop) ---------
-        if self.context.front_side.remains <= 10:
+        if self.context.front_side.remains <= LEVEL3_THESHOLD:
             conclusion = self.inference(level=3)
-            ops.extend([interact.Operation(h, w, "step") for h, w in conclusion["hints"]])
-            ops.extend([interact.Operation(h, w, "flag") for h, w in conclusion["flags"]])
+            ops.update({interact.Operation(h, w, "step") for h, w in conclusion["hints"]})
+            ops.update({interact.Operation(h, w, "flag") for h, w in conclusion["flags"]})
             if ops:
                 return ops
             else:
@@ -90,10 +98,10 @@ class Engine(object):
                             probs[position] = prob
 
         # --------- inference with level 4 (multiple hop and consider remaining mines) ---------
-        if self.context.front_side.remains <= 10:
+        if self.context.front_side.remains <= LEVEL4_THESHOLD:
             conclusion = self.inference(level=4)
-            ops.extend([interact.Operation(h, w, "step") for h, w in conclusion["hints"]])
-            ops.extend([interact.Operation(h, w, "flag") for h, w in conclusion["flags"]])
+            ops.update({interact.Operation(h, w, "step") for h, w in conclusion["hints"]})
+            ops.update({interact.Operation(h, w, "flag") for h, w in conclusion["flags"]})
             if ops:
                 # input()
                 return ops
@@ -109,6 +117,7 @@ class Engine(object):
         # self.context.save()
         # input()
 
+        # --------- guessing strategy ---------
         # four corners first
         if self.context.front_side.type(0, 0) == UNSEEN and (0, 0) not in probs:
             return interact.Operation(0, 0, "step")
@@ -118,6 +127,12 @@ class Engine(object):
             return interact.Operation(HEIGHT - 1, 0, "step")
         elif self.context.front_side.type(HEIGHT - 1, WIDTH - 1) == UNSEEN and (HEIGHT - 1, WIDTH - 1) not in probs:
             return interact.Operation(HEIGHT - 1, WIDTH - 1, "step")
+        # elif any([len(utils.look_around(unseen_h, unseen_w, self.context)["flags"]) >= 5
+        #           for unseen_h, unseen_w in self.context.front_side.unseens]):
+        #     unseen_to_nflags = {(unseen_h, unseen_w): len(utils.look_around(unseen_h, unseen_w, self.context)["flags"])
+        #                         for unseen_h, unseen_w in self.context.front_side.unseens}
+        #     h, w = max(unseen_to_nflags, key=unseen_to_nflags.get)
+        #     return interact.Operation(h, w, "step")
         # greedy strategy
         elif probs:
             max_prob, max_position = 0, None
@@ -166,7 +181,7 @@ class Engine(object):
                 pseudo_context.update(attempt)
                 if self.is_valid_attempt(self.context, pseudo_context):
                     if level == 1:
-                        counter.update(attempt)
+                        counter.update(pseudo_context)
                     else:
                         around_hints = list(
                             utils.iter_arounds(
@@ -244,8 +259,9 @@ class Engine(object):
 
     @staticmethod
     def first_step():
-        h, w = random.choice(list(range(HEIGHT))), random.choice(list(range(WIDTH)))
-        return interact.Operation(h, w, "step")
+        # h, w = random.choice(list(range(HEIGHT))), random.choice(list(range(WIDTH)))
+        # return interact.Operation(h, w, "step")
+        return interact.Operation(3, 3, "step")
 
     def random_step(self):
         h, w = random.choice(list(self.context.front_side.unseens))

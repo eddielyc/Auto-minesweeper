@@ -3,8 +3,8 @@
 # Author  : Yichen Lu
 
 
-from game.board import *
-from game.interact import *
+from minesweeper.board import *
+from minesweeper.interact import *
 from global_variables import *
 
 

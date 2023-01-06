@@ -7,11 +7,11 @@
 # Time    : 2022/12/31 16:44
 # Author  : Yichen Lu
 
-import game
+import minesweeper
 from solver import *
 
 
-import game
+import minesweeper
 from solver import *
 
 
@@ -20,7 +20,7 @@ cnt, win_cnt = 10000, 0
 first_step = Engine.first_step()
 
 for i in range(1, cnt + 1):
-    context = game.initialize(first_step)
+    context = minesweeper.initialize(first_step)
     engine = Engine(context)
 
     chance_of_winning = (win_cnt / (i - 1)) if i > 1 else 0.

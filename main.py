@@ -2,8 +2,8 @@
 # Time    : 2022/12/31 16:44
 # Author  : Yichen Lu
 
-import game
-from solver import *
+import minesweeper
+from solver import Engine
 
 
 cnt, win_cnt = 100, 0
@@ -11,7 +11,7 @@ cnt, win_cnt = 100, 0
 first_step = Engine.first_step()
 
 for i in range(1, cnt + 1):
-    context = game.initialize(first_step)
+    context = minesweeper.initialize(first_step)
     context.draw(hide_back_side=False)
 
     engine = Engine(context)
