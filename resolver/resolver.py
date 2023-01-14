@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 # Time    : 2023/1/4 19:19
 # Author  : Yichen Lu
+
 import time
+from pathlib import Path
+import multiprocessing
 
 from PIL import Image, ImageGrab
-from pathlib import Path
 import numpy as np
+
 from resolver.key_points import *
 from global_variables import *
 from skimage.feature import hog
@@ -24,25 +27,27 @@ class Resolver(object):
 
         self.src_features = self.load_src()
 
+        # self.pool = multiprocessing.Pool(multiprocessing.cpu_count())
+
     def load_src(self, src_dir="src"):
         src_dir = Path(src_dir)
         src_features = []
         # FIXME: I cannot find '8' image...
         for i in range(8):
-            src = Image.open(src_dir / f"{i}.png").resize((GRID_W_RES, GRID_H_RES))
+            src = Image.open(src_dir / f"{i}.png").resize((GRID_W, GRID_H))
             self.hints[str(i)] = self.normalize(
                 self.extract_feature(self.center_crop(self.image_to_array(src)))
             )
 
             src_features.append(self.hints[str(i)])
 
-        src = Image.open(src_dir / f"flag.png").resize((GRID_W_RES, GRID_H_RES))
+        src = Image.open(src_dir / f"flag.png").resize((GRID_W, GRID_H))
         self.flag = self.normalize(
             self.extract_feature(self.center_crop(self.image_to_array(src)))
         )
         src_features.append(self.flag)
 
-        src = Image.open(src_dir / f"unseen.png").resize((GRID_W_RES, GRID_H_RES))
+        src = Image.open(src_dir / f"unseen.png").resize((GRID_W, GRID_H))
         self.unseen = self.normalize(
             self.extract_feature(self.center_crop(self.image_to_array(src)))
         )
@@ -73,10 +78,10 @@ class Resolver(object):
             row = []
             for w in range(WIDTH):
                 top = int(BOARD_HEIGHT / HEIGHT * h)
-                bottom = int(BOARD_HEIGHT / HEIGHT * (h + 1)) + 1
+                bottom = top + GRID_H
                 left = int(BOARD_WIDTH / WIDTH * w)
-                right = int(BOARD_WIDTH / WIDTH * (w + 1)) + 1
-                row.append(np.array(Image.fromarray(board[top: bottom, left: right]).resize((GRID_W_RES, GRID_H_RES)),
+                right = left + GRID_W
+                row.append(np.array(Image.fromarray(board[top: bottom, left: right]),
                                     dtype=np.float))
             grids.append(row)
         return grids
@@ -97,7 +102,7 @@ class Resolver(object):
         else:
             raise RuntimeError
 
-    def center_crop(self, image, w=8):
+    def center_crop(self, image, w=12):
         return image[w: -w, w: -w, ...]
 
     @staticmethod
@@ -110,11 +115,12 @@ class Resolver(object):
         board = self.image_to_array(board)
         board = self.gridify(board)
 
-        for i, row in enumerate(board):
-            for j, grid in enumerate(row):
-                board[i][j] = self.classify(grid)
+        for h, row in enumerate(board):
+            for w, grid in enumerate(row):
+                board[h][w] = self.classify(grid)
 
         self.front_side.board = board
+        self.front_side.update_from_board()
 
     def is_win_or_over(self):
         # call time.sleep() here because the win or over board cannot pop-up immediately

@@ -8,9 +8,6 @@ import math
 from collections import defaultdict
 from global_variables import *
 import unicodedata
-from pathlib import Path
-import pickle
-import time
 
 biases = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]
 
@@ -86,7 +83,7 @@ def look_around(h, w, context, pseudo_context=None) -> Dict:
     #       "flags" -> positions of flags around
     #       "unseens" -> positions of unseens around
     #       "hints" -> hints of flags around
-    #       "self" -> value of self (hint)
+    #       "self" -> value of self (maybe hint, flag or unseen)
     #       "remains" -> number of remain mines
     """
 
@@ -136,3 +133,50 @@ def information_gain(distribution_a: Union[int, List], distribution_b: Union[int
     :return: information gain
     """
     return entropy(distribution_b) - entropy(distribution_a)
+
+
+def iter_inland_unseens(context):
+    for unseen_h, unseen_w in context.front_side.unseens:
+        around = look_around(unseen_h, unseen_w, context)
+        if len(around["hints"]) == 0:
+            yield unseen_h, unseen_w
+
+
+def iter_corners_and_sides():
+    # corner first
+    for corner in [(0, 0), (0, WIDTH - 1), (HEIGHT - 1, 0), (HEIGHT - 1, WIDTH - 1)]:
+        yield corner
+    # # top side
+    # for w in range(1, WIDTH - 1):
+    #     yield 0, w
+    # # bottom side
+    # for w in range(1, WIDTH - 1):
+    #     yield HEIGHT - 1, w
+    # # left side
+    # for h in range(1, HEIGHT - 1):
+    #     yield h, 0
+    # # right side
+    # for h in range(1, HEIGHT - 1):
+    #     yield h, WIDTH - 1
+
+
+class UnionFind(object):
+    def __init__(self, nodes):
+        self.father_dict = {node: node for node in nodes}
+
+    def find(self, node):
+        father = self.father_dict[node]
+        if father == node:
+            return father
+
+        father = self.find(father)
+        self.father_dict[node] = father
+        return father
+
+    def is_in_same_set(self, node_a, node_b):
+        return self.find(node_a) == self.find(node_b)
+
+    def union(self, node_a, node_b):
+        father_a, father_b = self.find(node_a), self.find(node_b)
+        if father_a != father_b:
+            self.father_dict[father_b] = father_a

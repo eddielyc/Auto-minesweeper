@@ -5,17 +5,23 @@
 
 HEIGHT, WIDTH = 16, 30
 MINES = 99
-
-# HEIGHT, WIDTH = 2, 3
-# MINES = 2
+# HEIGHT, WIDTH = 4, 7
+# MINES = 9
 
 UNSEEN = "🟦"
 FLAG = "🚩"
 MINE = "💀"
 TAB_SIZE = 3
 VERSION = "new"
-LEVEL3_THESHOLD = 10
+
 LEVEL4_THESHOLD = 10
+# LEVEL6 is always on
+LEVEL6_THESHOLD1 = 10
+LEVEL6_THESHOLD2 = 15
+
+# LEVEL3 and LEVEL 5 are rubbish, DO NOT set them on.
+LEVEL3_THESHOLD = -1
+LEVEL5_THESHOLD = -1
 
 CH_MAP = {
     "0": "0️⃣",
@@ -28,4 +34,3 @@ CH_MAP = {
     "7": "7️⃣",
     "8": "8️⃣",
 }
-

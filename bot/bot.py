@@ -44,7 +44,6 @@ class Bot(object):
     def interact(self):
         self.move_mouse_to_corner()
         self.resolver.resolve()
-        self.context.front_side.update_from_board()
 
         ops = self.engine.what_next(mode="most")
         signal = self.execute_ops(ops)

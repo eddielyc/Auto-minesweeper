@@ -24,8 +24,17 @@ with keyboard.pressed(Key.alt):
     keyboard.press(Key.tab)
 
 time.sleep(0.5)
-# try:
-bot.play_a_complete_game()
-# except TypeError:
-#     s = bot.context.front_side.draw_board()
-#     print(s)
+try:
+    bot.play_a_complete_game()
+except:
+    s = context.front_side.draw_board()
+    print(s)
+
+# while True:
+#     try:
+#         time.sleep(2)
+#         bot.play_a_complete_game()
+#     except KeyboardInterrupt:
+#         break
+#     except:
+#         keyboard.press(Key.esc)

@@ -14,7 +14,8 @@ for i in range(1, cnt + 1):
     context = minesweeper.initialize(first_step)
     context.draw(hide_back_side=False)
 
-    engine = Engine(context)
+    # engine = Engine(context)
+    engine = Engine(context, debug=True)
 
     while not context.is_over and not context.is_win:
         # h, w, op = input("\nCommand:").strip().split()

@@ -9,7 +9,6 @@ from pynput.mouse import Button, Controller as MController
 
 from minesweeper.board import FrontSide
 
-
 mouse = MController()
 keyboard = KController()
 
@@ -23,12 +22,8 @@ front_side = FrontSide(HEIGHT, WIDTH)
 front_side.initialize()
 resolver = Resolver(front_side)
 
-# start = time.time()
-# resolver.resolve()
-# print(time.time() - start)
-#
-# s = front_side.draw_board()
-# print(s)
+resolver.resolve()
 
-signal = resolver.is_win_or_over()
-print(signal)
+
+s = front_side.draw_board()
+print(s)
