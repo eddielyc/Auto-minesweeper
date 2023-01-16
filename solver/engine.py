@@ -241,9 +241,10 @@ class Engine(object):
 
     @staticmethod
     def first_step():
-        # h, w = random.choice(list(range(HEIGHT))), random.choice(list(range(WIDTH)))
-        # return interact.Operation(h, w, "step")
-        return interact.Operation(2, 2, "step")
+        if VERSION == "new":
+            return interact.Operation(2, 2, "step")
+        else:
+            return interact.Operation(0, 0, "step")
 
     def random_step(self):
         h, w = random.choice(list(self.context.front_side.unseens))
@@ -330,6 +331,10 @@ class Engine(object):
             if math.isclose(prob, min_prob):
                 min_prob_positions.append(position)
 
+        for h, w in min_prob_positions:
+            if (h, w) in [(0, 0), (0, WIDTH - 1), (HEIGHT - 1, 0), (HEIGHT - 1, WIDTH - 1)]:
+                return interact.Operation(h, w, "step")
+
         # 2. sort by number of unseen tiles around, less is better
         min_prob_positions = sorted(
             min_prob_positions,
@@ -343,7 +348,7 @@ class Engine(object):
 
     def hold_on(self, prefix=None):
         print(prefix)
-        msg = input("Input:")
+        msg = input('Input: (Press "save" to save the context, press "debug" to debug with pdb)')
         if msg.strip() == "save":
             self.context.save()
         elif msg.strip() == "debug":

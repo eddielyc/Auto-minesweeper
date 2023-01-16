@@ -12,7 +12,7 @@ UNSEEN = "🟦"
 FLAG = "🚩"
 MINE = "💀"
 TAB_SIZE = 3
-VERSION = "new"
+VERSION = "old"
 
 LEVEL4_THESHOLD = 10
 # LEVEL6 is always on

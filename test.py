@@ -26,8 +26,8 @@ context = minesweeper.initialize(first_step)
 # print(s)
 
 context.load()
-# s = context.front_side.draw_board(lambda x: {UNSEEN: "[ ]", FLAG: "P"}.get(x, x))
-s = context.front_side.draw_board()
+s = context.front_side.draw_board(lambda x: {UNSEEN: "[ ]", FLAG: "P"}.get(x, x))
+# s = context.front_side.draw_board()
 print(s)
 
 # resolver = Resolver(context.front_side)
