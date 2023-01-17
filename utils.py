@@ -3,8 +3,7 @@
 # Author  : Yichen Lu
 
 from typing import Dict, Union, List, Tuple
-import itertools
-import math
+from time import time
 from collections import defaultdict
 from global_variables import *
 import unicodedata
@@ -57,10 +56,6 @@ def iter_arounds(positions, height=HEIGHT, width=WIDTH, around_type=None, contex
                     yield around_h, around_w
 
 
-def is_mine(h, w, board):
-    return board[h][w] == MINE
-
-
 def get_ch_width(ch):
     return 2 if unicodedata.east_asian_width(ch) in ["A", "F", "W"] else 1
 
@@ -68,12 +63,6 @@ def get_ch_width(ch):
 def fill_till_width(word, width, fill_ch=" "):
     word_width = sum([get_ch_width(ch) for ch in word])
     return fill_ch * (width - word_width) + word
-
-
-def assign_probability(unseens, mines):
-    if mines == 0:
-        return 0.
-    return math.comb(unseens - 1, mines - 1) / math.comb(unseens, mines)
 
 
 def look_around(h, w, context, pseudo_context=None) -> Dict:
@@ -118,23 +107,6 @@ def iter_incomplete_hints(context):
             yield hint_h, hint_w
 
 
-def entropy(distribution: Union[int, List]):
-    if isinstance(distribution, int):
-        assert distribution >= 1
-        return math.log(distribution, base=math.e)
-    assert 0.999 <= sum(distribution) <= 1.001
-    return sum([-math.log(p, base=math.e) for p in distribution]) / len(distribution)
-
-
-def information_gain(distribution_a: Union[int, List], distribution_b: Union[int, List]):
-    """
-    :param distribution_a: current distribution
-    :param distribution_b: original distribution
-    :return: information gain
-    """
-    return entropy(distribution_b) - entropy(distribution_a)
-
-
 def iter_inland_unseens(context):
     for unseen_h, unseen_w in context.front_side.unseens:
         around = look_around(unseen_h, unseen_w, context)
@@ -142,22 +114,10 @@ def iter_inland_unseens(context):
             yield unseen_h, unseen_w
 
 
-def iter_corners_and_sides():
-    # corner first
-    for corner in [(0, 0), (0, WIDTH - 1), (HEIGHT - 1, 0), (HEIGHT - 1, WIDTH - 1)]:
-        yield corner
-    # # top side
-    # for w in range(1, WIDTH - 1):
-    #     yield 0, w
-    # # bottom side
-    # for w in range(1, WIDTH - 1):
-    #     yield HEIGHT - 1, w
-    # # left side
-    # for h in range(1, HEIGHT - 1):
-    #     yield h, 0
-    # # right side
-    # for h in range(1, HEIGHT - 1):
-    #     yield h, WIDTH - 1
+def create_timer_function(start, last):
+    def timer():
+        return time() - start > last
+    return timer
 
 
 class UnionFind(object):

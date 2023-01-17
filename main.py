@@ -18,10 +18,6 @@ for i in range(1, cnt + 1):
     engine = Engine(context, debug=True)
 
     while not context.is_over and not context.is_win:
-        # h, w, op = input("\nCommand:").strip().split()
-        # h, w = int(h), int(w)
-        # ops = interact.Operation(h, w, op)
-
         ops = engine.what_next()
         context.interact(ops)
         chance_of_winning = (win_cnt / (i - 1)) if i > 1 else 0.

@@ -32,7 +32,7 @@ class Resolver(object):
     def load_src(self, src_dir="src"):
         src_dir = Path(src_dir)
         src_features = []
-        # FIXME: I cannot find '8' image...
+        # I cannot grab '8' image...
         for i in range(8):
             src = Image.open(src_dir / f"{i}.png").resize((GRID_W, GRID_H))
             self.hints[str(i)] = self.normalize(

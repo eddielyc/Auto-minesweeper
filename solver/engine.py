@@ -69,9 +69,8 @@ class Engine(object):
             if ops and mode == "least":
                 return ops
 
-        # "most" mode or no solution in all first hops
+        # "most" mode or no solution in level 1
         # --------- inference with level 2 (double hop) ---------
-
         for hint_h, hint_w in utils.iter_incomplete_hints(self.context):
             conclusion = self.inference(level=2, h=hint_h, w=hint_w)
             ops.update({interact.Operation(h, w, "step") for h, w in conclusion["hints"]})
@@ -82,21 +81,17 @@ class Engine(object):
         if mode == "most" and ops:
             return ops
 
-        # level 4 first
-        # --------- inference with level 4 (multiple hop and consider remaining mines) ---------
-        if self.context.front_side.remains <= LEVEL4_THESHOLD:
-            print("Inference with level 4")
-            conclusion = self.inference(level=4)
-            ops.update({interact.Operation(h, w, "step") for h, w in conclusion["hints"]})
-            ops.update({interact.Operation(h, w, "flag") for h, w in conclusion["flags"]})
-            if ops:
-                return ops
+        # no solution in level 1 and level 2
+        # --------- inference with level 3 (multiple hop and consider remaining mines) ---------
+        conclusion = self.inference(level=3)
+        ops.update({interact.Operation(h, w, "step") for h, w in conclusion["hints"]})
+        ops.update({interact.Operation(h, w, "flag") for h, w in conclusion["flags"]})
+        if ops:
+            return ops
 
-        # --------- inference with level 6 (global inference) ---------
-        print("Inference with level 6")
-        conclusion = self.inference(level=6)
+        # --------- inference with level 4 (global inference) ---------
+        conclusion = self.inference(level=4)
 
-        # self.context.save()
         return self.let_me_guess(conclusion["probs"])
 
     def inference(
@@ -106,12 +101,11 @@ class Engine(object):
             w=None,
     ):
         """
-        dfs possible attempts
         :param level:
             level 1: inference with single point
             level 2: inference with single point and hints around
-            level 3: inference with multiple hints
-            level 4: inference with multiple hints and number of remaining mines
+            level 3: global inference with multiple hints and number of remaining mines
+            level 4: global inference to get precise probability
         :param h: h
         :param w: w
         :return: probability table
@@ -144,42 +138,24 @@ class Engine(object):
             counter = Counter()
             pseudo_context = PseudoContext()
             incomplete_hints = list(utils.iter_incomplete_hints(context=self.context))
-            self.dfs(incomplete_hints, self.context, pseudo_context, counter, consider_remains=False)
-            conclusion = counter.conclude()
+            finished = self.dfs(incomplete_hints, self.context, pseudo_context, counter, consider_remains=True,
+                                terminate_func=utils.create_timer_function(time.time(), LEVEL3_THESHOLD))
+            if finished:
+                conclusion = counter.conclude()
+            else:
+                conclusion = {"probs": dict(), "flags": [], "hints": []}
         elif level == 4:
-            counter = Counter()
-            pseudo_context = PseudoContext()
-            incomplete_hints = list(utils.iter_incomplete_hints(context=self.context))
-            self.dfs(incomplete_hints, self.context, pseudo_context, counter, consider_remains=True)
-            conclusion = counter.conclude()
-        elif level == 5:
-            incomplete_hint_groups = self.joint_unseen_grouping()
-            conclusions = []
-            for group in incomplete_hint_groups:
-                counter = Counter()
-                pseudo_context = PseudoContext()
-                self.dfs(list(group), self.context, pseudo_context, counter, consider_remains=False)
-                conclusions.append(counter.conclude())
-            conclusion = Counter.merge_conclusions(conclusions)
-
-            inland_unseens = list(utils.iter_inland_unseens(self.context))
-            n_mines_around = self.n_mines_around(incomplete_hint_groups)
-            remains = self.context.front_side.remains
-            probs = {unseen: (remains - n_mines_around) / len(inland_unseens) for unseen in inland_unseens}
-            conclusion = Counter.merge_conclusions([conclusion, {"probs": probs, "flags": [], "hints": []}])
-            # conclusion = {"probs": probs, "flags": [], "hints": []}
-        elif level == 6:
-            incomplete_hint_groups = self.joint_unseen_grouping()
+            incomplete_hint_groups = self.group_unseens_into_disjoint_sets()
             counters = self.deep_inference(incomplete_hint_groups, force_dfs=False)
             inland_unseens = list(utils.iter_inland_unseens(self.context))
             try:
-                probs = Counter.joint_counters(counters, inland_unseens, self.context.front_side.remains)
+                probs = Counter.calc_prob_with_disjoint_counters(counters, inland_unseens, self.context.front_side.remains)
             except ValueError:
                 counters = self.deep_inference(incomplete_hint_groups, force_dfs=True)
-                probs = Counter.joint_counters(counters, inland_unseens, self.context.front_side.remains)
+                probs = Counter.calc_prob_with_disjoint_counters(counters, inland_unseens, self.context.front_side.remains)
             conclusion = {"probs": probs, "flags": [], "hints": []}
         else:
-            raise ValueError(f"Invalid level inference level: {level}, expect level in [1, 2, 3, 4, 5].")
+            raise ValueError(f"Invalid level inference level: {level}, expect level in [1, 2, 3, 4].")
         return conclusion
 
     def dfs(
@@ -193,26 +169,32 @@ class Engine(object):
     ):
         if len(hints) == 0:
             counter.update(pseudo_context, consider_remains, context)
-            return
+            return True
 
         hint_h, hint_w = hints.pop()
 
         around = utils.look_around(hint_h, hint_w, context, pseudo_context)
         attempts = list(self.iter_attempts(hint_h, hint_w, around))
         if len(attempts) == 0:
-            self.dfs(hints, context, pseudo_context, counter, consider_remains)
+            finished = self.dfs(hints, context, pseudo_context, counter, consider_remains, terminate_func)
             hints.append((hint_h, hint_w))
-            return
+            return finished
 
         for attempt in attempts:
             pseudo_context.update(attempt)
             if self.is_valid_attempt(context, pseudo_context):
-                self.dfs(hints, context, pseudo_context, counter, consider_remains)
+                finished = self.dfs(hints, context, pseudo_context, counter, consider_remains, terminate_func)
+                if not finished:
+                    pseudo_context.undo(attempt)
+                    return finished
+                elif terminate_func and terminate_func():
+                    pseudo_context.undo(attempt)
+                    hints.append((hint_h, hint_w))
+                    return False
             pseudo_context.undo(attempt)
-            if terminate_func and terminate_func():
-                hints.append((hint_h, hint_w))
-                return
+
         hints.append((hint_h, hint_w))
+        return True
 
     def is_valid_attempt(self, context: interact.Context, pseudo_context: PseudoContext):
         if len(pseudo_context.pseudo_flags) > context.front_side.remains or \
@@ -266,7 +248,7 @@ class Engine(object):
                     pseudo_hints.add(unseens[i])
             yield Attempt(h, w, pseudo_flags, pseudo_hints)
 
-    def joint_unseen_grouping(self):
+    def group_unseens_into_disjoint_sets(self):
         """
         Divide incomplete hints into groups. In each group, any hint share joint unseen tile with
         some other tiles in the group.
@@ -290,9 +272,9 @@ class Engine(object):
             groups[uf.find(incomplete_hint)].add(incomplete_hint)
         return list(groups.values())
 
-    def n_mines_around(self, incomplete_hint_groups):
+    def how_many_mines_around(self, incomplete_hint_groups):
         """
-        number of mines around at most for sure.
+        number of mines around at least for sure.
         :return: mines
         """
         def dfs(incomplete_hints, visited_unseens: Set, mines=0, maximum=0):
@@ -356,36 +338,30 @@ class Engine(object):
 
     def deep_inference(self, incomplete_hint_groups, force_dfs=False):
         counters = []
-
         for group in incomplete_hint_groups:
-            if force_dfs or (len(group) <= LEVEL6_THESHOLD1):
+            if force_dfs:
                 counter = Counter(mode="deep")
                 pseudo_context = PseudoContext()
                 self.dfs(list(group), self.context, pseudo_context, counter)
-            elif LEVEL6_THESHOLD1 < len(group) <= LEVEL6_THESHOLD2:
-                n_mines_around = self.n_mines_around([group])
-                around_unseens = list(utils.iter_arounds(group, around_type=UNSEEN, context=self.context))
-                counter = Counter(mode="deep")
-                counter.pseudo_contexts = {
-                    n_mines_around: {
-                        "flag_cnts": {pos: n_mines_around / len(around_unseens) for pos in around_unseens},
-                        "cnt": 1,
-                    }
-                }
-                counter.cnt = 1
             else:
-                # simple estimate
                 counter = Counter(mode="deep")
                 pseudo_context = PseudoContext()
-                self.dfs(list(group), self.context, pseudo_context, counter, terminate_func=lambda: counter.cnt >= 1)
-                n_mines_around = min(counter.pseudo_contexts.keys())
-                around_unseens = list(utils.iter_arounds(group, around_type=UNSEEN, context=self.context))
-                counter.pseudo_contexts = {
-                    n_mines_around: {
-                        "flag_cnts": {pos: n_mines_around / len(around_unseens) for pos in around_unseens},
-                        "cnt": 1
+                start = time.time()
+                finished = self.dfs(list(group), self.context, pseudo_context, counter,
+                                    terminate_func=utils.create_timer_function(time.time(), LEVEL4_THESHOLD))
+                if not finished:
+                    # simple estimate
+                    counter = Counter(mode="deep")
+                    pseudo_context = PseudoContext()
+                    self.dfs(list(group), self.context, pseudo_context, counter, terminate_func=lambda: counter.cnt >= 1)
+                    n_mines_around = min(counter.pseudo_contexts.keys())
+                    around_unseens = list(utils.iter_arounds(group, around_type=UNSEEN, context=self.context))
+                    counter.pseudo_contexts = {
+                        n_mines_around: {
+                            "flag_cnts": {pos: n_mines_around / len(around_unseens) for pos in around_unseens},
+                            "cnt": 1
+                        }
                     }
-                }
-                counter.cnt = 1
+                    counter.cnt = 1
             counters.append(counter)
         return counters

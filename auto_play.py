@@ -2,6 +2,7 @@
 # Time    : 2023/1/5 23:24
 # Author  : Yichen Lu
 
+# THIS IS RUBBISH, DO NOT USE.
 import time
 
 import minesweeper

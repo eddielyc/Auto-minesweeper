@@ -101,7 +101,7 @@ class Counter(object):
         return {"probs": probs, "flags": list(flags), "hints": list(hints)}
 
     @staticmethod
-    def joint_counters(counters, inland_unseens, remains):
+    def calc_prob_with_disjoint_counters(counters, inland_unseens, remains):
         # UGLY IMPLEMENT
         def dp(counters):
             statistics = defaultdict(int)

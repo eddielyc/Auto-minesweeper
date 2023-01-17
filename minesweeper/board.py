@@ -102,7 +102,7 @@ class BackSide(Board):
         for h in range(self.height):
             for w in range(self.width):
                 if self.board[h][w] != MINE:
-                    self.board[h][w] = str(sum(utils.is_mine(around_h, around_w, self.board)
+                    self.board[h][w] = str(sum(self.board[around_h][around_w] == MINE
                                            for around_h, around_w in utils.iter_around(h, w, self.height, self.width)))
         return self.board
 

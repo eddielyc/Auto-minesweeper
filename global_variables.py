@@ -12,25 +12,13 @@ UNSEEN = "🟦"
 FLAG = "🚩"
 MINE = "💀"
 TAB_SIZE = 3
-VERSION = "old"
+# In old version, first step is safe for sure, but it may not be "0".
+# And in new version, first step is safe for sure and it must be "0".
+VERSION = "new"
 
+# When remaining mines are less than LEVEL3_THESHOLD, level 3 (multiple hop and consider remaining mines) is on.
+# LEVEL3_THESHOLD = 10
+# The longest time (10 seconds for default) allowed in dfs function in LEVEL3 inference, when time runs out, dfs will be terminated.
+LEVEL3_THESHOLD = 10
+# The longest time (10 seconds for default) allowed in dfs function in LEVEL4 inference, when time runs out, dfs will be terminated.
 LEVEL4_THESHOLD = 10
-# LEVEL6 is always on
-LEVEL6_THESHOLD1 = 10
-LEVEL6_THESHOLD2 = 15
-
-# LEVEL3 and LEVEL 5 are rubbish, DO NOT set them on.
-LEVEL3_THESHOLD = -1
-LEVEL5_THESHOLD = -1
-
-CH_MAP = {
-    "0": "0️⃣",
-    "1": "1️⃣",
-    "2": "2️⃣",
-    "3": "3️⃣",
-    "4": "4️⃣",
-    "5": "5️⃣",
-    "6": "6️⃣",
-    "7": "7️⃣",
-    "8": "8️⃣",
-}
