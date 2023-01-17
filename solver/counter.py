@@ -37,7 +37,6 @@ class Counter(object):
     def conclude(self):
         probs = dict()
         flags, hints = [], []
-        minimum, maximum = 1, 0
         for position, cnt in self.position_cnt.items():
             times_flag, times_relevant = cnt
             if times_relevant != self.cnt:
@@ -90,18 +89,7 @@ class Counter(object):
             self.pseudo_contexts[len(pseudo_context.pseudo_flags)] = {"flag_cnts": flag_cnts, "cnt": cnt + 1}
 
     @staticmethod
-    def merge_conclusions(conclusions):
-        probs = dict()
-        flags, hints = set(), set()
-        for conclusion in conclusions:
-            flags.update(conclusion["flags"])
-            hints.update(conclusion["hints"])
-            for pos, prob in conclusion["probs"].items():
-                probs[pos] = max(prob, probs.get(pos, 0.))
-        return {"probs": probs, "flags": list(flags), "hints": list(hints)}
-
-    @staticmethod
-    def calc_prob_with_disjoint_counters(counters, inland_unseens, remains):
+    def conclude_with_disjoint_counters(counters, inland_unseens, remains):
         # UGLY IMPLEMENT
         def dp(counters):
             statistics = defaultdict(int)
@@ -150,4 +138,11 @@ class Counter(object):
 
         probs = {unseen: cnt / total for unseen, cnt in cnts.items()}
         probs.update(inland_probs)
-        return probs
+
+        flags, hints = [], []
+        for position, prob in probs.items():
+            if math.isclose(prob, 0.):
+                hints.append(position)
+            elif math.isclose(prob, 1.):
+                flags.append(position)
+        return {"probs": probs, "hints": hints, "flags": flags}

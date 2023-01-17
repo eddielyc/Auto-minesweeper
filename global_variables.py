@@ -16,9 +16,6 @@ TAB_SIZE = 3
 # And in new version, first step is safe for sure and it must be "0".
 VERSION = "new"
 
-# When remaining mines are less than LEVEL3_THESHOLD, level 3 (multiple hop and consider remaining mines) is on.
-# LEVEL3_THESHOLD = 10
-# The longest time (10 seconds for default) allowed in dfs function in LEVEL3 inference, when time runs out, dfs will be terminated.
-LEVEL3_THESHOLD = 10
-# The longest time (10 seconds for default) allowed in dfs function in LEVEL4 inference, when time runs out, dfs will be terminated.
-LEVEL4_THESHOLD = 10
+# The longest time (10 seconds for default) allowed in dfs function in LEVEL3 inference
+# When time runs out, dfs will be terminated.
+LEVEL3_THRESHOLD = 20

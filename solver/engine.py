@@ -82,15 +82,12 @@ class Engine(object):
             return ops
 
         # no solution in level 1 and level 2
-        # --------- inference with level 3 (multiple hop and consider remaining mines) ---------
+        # --------- inference with level 3 (global inference) ---------
         conclusion = self.inference(level=3)
         ops.update({interact.Operation(h, w, "step") for h, w in conclusion["hints"]})
         ops.update({interact.Operation(h, w, "flag") for h, w in conclusion["flags"]})
         if ops:
             return ops
-
-        # --------- inference with level 4 (global inference) ---------
-        conclusion = self.inference(level=4)
 
         return self.let_me_guess(conclusion["probs"])
 
@@ -135,25 +132,15 @@ class Engine(object):
                 pseudo_context.undo(attempt)
             conclusion = counter.conclude()
         elif level == 3:
-            counter = Counter()
-            pseudo_context = PseudoContext()
-            incomplete_hints = list(utils.iter_incomplete_hints(context=self.context))
-            finished = self.dfs(incomplete_hints, self.context, pseudo_context, counter, consider_remains=True,
-                                terminate_func=utils.create_timer_function(time.time(), LEVEL3_THESHOLD))
-            if finished:
-                conclusion = counter.conclude()
-            else:
-                conclusion = {"probs": dict(), "flags": [], "hints": []}
-        elif level == 4:
             incomplete_hint_groups = self.group_unseens_into_disjoint_sets()
             counters = self.deep_inference(incomplete_hint_groups, force_dfs=False)
             inland_unseens = list(utils.iter_inland_unseens(self.context))
             try:
-                probs = Counter.calc_prob_with_disjoint_counters(counters, inland_unseens, self.context.front_side.remains)
+                conclusion = Counter.conclude_with_disjoint_counters(counters, inland_unseens, self.context.front_side.remains)
             except ValueError:
-                counters = self.deep_inference(incomplete_hint_groups, force_dfs=True)
-                probs = Counter.calc_prob_with_disjoint_counters(counters, inland_unseens, self.context.front_side.remains)
-            conclusion = {"probs": probs, "flags": [], "hints": []}
+                conclusion = {"probs": dict(), "flags": [], "hints": []}
+                # counters = self.deep_inference(incomplete_hint_groups, force_dfs=True)
+                # conclusion = Counter.conclude_with_disjoint_counters(counters, inland_unseens, self.context.front_side.remains)
         else:
             raise ValueError(f"Invalid level inference level: {level}, expect level in [1, 2, 3, 4].")
         return conclusion
@@ -272,38 +259,10 @@ class Engine(object):
             groups[uf.find(incomplete_hint)].add(incomplete_hint)
         return list(groups.values())
 
-    def how_many_mines_around(self, incomplete_hint_groups):
-        """
-        number of mines around at least for sure.
-        :return: mines
-        """
-        def dfs(incomplete_hints, visited_unseens: Set, mines=0, maximum=0):
-            if not incomplete_hints:
-                maximum = mines if mines > maximum else maximum
-                return maximum
-
-            hint_h, hint_w = incomplete_hints.pop()
-            around = utils.look_around(hint_h, hint_w, self.context)
-            around_unseens = set(around["unseens"])
-            if visited_unseens.intersection(around_unseens):
-                maximum = dfs(incomplete_hints, visited_unseens, mines, maximum)
-            else:
-                # join dfs
-                visited_unseens.update(around_unseens)
-                mines += around["remains"]
-                maximum = dfs(incomplete_hints, visited_unseens, mines, maximum)
-                visited_unseens.difference_update(around_unseens)
-                mines -= around["remains"]
-                # not join dfs
-                maximum = dfs(incomplete_hints, visited_unseens, mines, maximum)
-
-            incomplete_hints.append((hint_h, hint_w))
-            return maximum
-
-        n_mines_around = sum([dfs(list(group), set()) for group in incomplete_hint_groups])
-        return n_mines_around
-
     def let_me_guess(self, probs: Dict):
+        if not probs:
+            return self.random_step()
+
         # only step, no flag
         # 1. sort by probs
         sorted_probs = sorted(list(probs.items()), key=lambda pos_prob: pos_prob[1])
@@ -325,7 +284,7 @@ class Engine(object):
 
         h, w = min_prob_positions[0]
         if self.debug:
-            self.hold_on(f"Min prob position {(h, w)}: {min_prob}  {probs}")
+            self.hold_on(f"Min prob position {(h, w)}: {min_prob}")
         return interact.Operation(h, w, "step")
 
     def hold_on(self, prefix=None):
@@ -348,7 +307,7 @@ class Engine(object):
                 pseudo_context = PseudoContext()
                 start = time.time()
                 finished = self.dfs(list(group), self.context, pseudo_context, counter,
-                                    terminate_func=utils.create_timer_function(time.time(), LEVEL4_THESHOLD))
+                                    terminate_func=utils.create_timer_function(time.time(), LEVEL3_THRESHOLD))
                 if not finished:
                     # simple estimate
                     counter = Counter(mode="deep")
