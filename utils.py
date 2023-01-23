@@ -89,6 +89,8 @@ def look_around(h, w, context, pseudo_context=None) -> Dict:
                 around['flags'].append((around_h, around_w))
             elif pseudo_context and (around_h, around_w) in pseudo_context.pseudo_hints:
                 around['hints'].append((around_h, around_w))
+            elif pseudo_context and (around_h, around_w) in pseudo_context.pseudo_clears:
+                around['pseudo_clears'].append((around_h, around_w))
             else:
                 around['unseens'].append((around_h, around_w))
         elif isinstance(element, int):
@@ -118,6 +120,10 @@ def create_timer_function(start, last):
     def timer():
         return time() - start > last
     return timer
+
+
+def manhattan_distance(pos_a, pos_b):
+    return abs(pos_a[0] - pos_b[0]) + abs(pos_a[1] - pos_b[1])
 
 
 class UnionFind(object):
