@@ -22,7 +22,14 @@ class PseudoContext(object):
         self.visited = set()
         self.pseudo_flags = set()
         self.pseudo_hints = set()
-        self.attempts_chain = []
+        # only used in Engine.num_clear_tiles_if_hw_is_safe()
+        self.pseudo_clears = set()
+
+        self.map = {
+            "pseudo_flag": self.pseudo_flags,
+            "pseudo_hint": self.pseudo_hints,
+            "pseudo_clear": self.pseudo_clears
+        }
 
     def update(self, attempt: Attempt):
         assert self.pseudo_flags.isdisjoint(attempt.pseudo_flags) and \
@@ -32,7 +39,6 @@ class PseudoContext(object):
         self.visited.add((attempt.h, attempt.w))
         self.pseudo_flags.update(attempt.pseudo_flags)
         self.pseudo_hints.update(attempt.pseudo_hints)
-        self.attempts_chain.append(hash(attempt))
 
     def undo(self, attempt: Attempt):
         assert self.pseudo_flags.issuperset(attempt.pseudo_flags) and \
@@ -42,8 +48,16 @@ class PseudoContext(object):
         self.visited.remove((attempt.h, attempt.w))
         self.pseudo_flags.difference_update(attempt.pseudo_flags)
         self.pseudo_hints.difference_update(attempt.pseudo_hints)
-        assert self.attempts_chain and self.attempts_chain[-1] == hash(attempt)
-        self.attempts_chain.pop()
+
+    def register(self, h, w, name):
+        if (h, w) not in self.pseudo_flags.union(self.pseudo_hints):
+            if (h, w) in self.pseudo_clears:
+                self.pseudo_clears.remove((h, w))
+            self.map[name].add((h, w))
+        elif (h, w) in self.pseudo_flags and name == "pseudo_hints":
+            raise RuntimeError
+        elif (h, w) in self.pseudo_hints and name == "pseudo_flags":
+            raise RuntimeError
 
 
 class Engine(object):
@@ -89,7 +103,7 @@ class Engine(object):
         if ops:
             return ops
 
-        return self.let_me_guess(conclusion["probs"])
+        return self.let_me_guess_v1(conclusion["probs"])
 
     def inference(
             self,
@@ -101,8 +115,7 @@ class Engine(object):
         :param level:
             level 1: inference with single point
             level 2: inference with single point and hints around
-            level 3: global inference with multiple hints and number of remaining mines
-            level 4: global inference to get precise probability
+            level 3: global inference to get precise probability
         :param h: h
         :param w: w
         :return: probability table
@@ -132,7 +145,7 @@ class Engine(object):
                 pseudo_context.undo(attempt)
             conclusion = counter.conclude()
         elif level == 3:
-            incomplete_hint_groups = self.group_unseens_into_disjoint_sets()
+            incomplete_hint_groups = self.group_incomplete_hints_into_disjoint_sets()
             counters = self.deep_inference(incomplete_hint_groups, force_dfs=False)
             inland_unseens = list(utils.iter_inland_unseens(self.context))
             try:
@@ -217,6 +230,7 @@ class Engine(object):
 
     def random_step(self):
         h, w = random.choice(list(self.context.front_side.unseens))
+        self.hold_on(f"Random Step: {(h, w)}")
         return interact.Operation(h, w, "step")
 
     @staticmethod
@@ -235,7 +249,7 @@ class Engine(object):
                     pseudo_hints.add(unseens[i])
             yield Attempt(h, w, pseudo_flags, pseudo_hints)
 
-    def group_unseens_into_disjoint_sets(self):
+    def group_incomplete_hints_into_disjoint_sets(self, return_indexing=False):
         """
         Divide incomplete hints into groups. In each group, any hint share joint unseen tile with
         some other tiles in the group.
@@ -257,9 +271,13 @@ class Engine(object):
         groups = defaultdict(set)
         for incomplete_hint in incomplete_hints:
             groups[uf.find(incomplete_hint)].add(incomplete_hint)
-        return list(groups.values())
+        if not return_indexing:
+            return list(groups.values())
+        else:
+            indexing = {incomplete_hint: groups[uf.find(incomplete_hint)] for incomplete_hint in incomplete_hints}
+            return list(groups.values()), indexing
 
-    def let_me_guess(self, probs: Dict):
+    def let_me_guess_v1(self, probs: Dict):
         if not probs:
             return self.random_step()
 
@@ -272,14 +290,10 @@ class Engine(object):
             if math.isclose(prob, min_prob):
                 min_prob_positions.append(position)
 
-        for h, w in min_prob_positions:
-            if (h, w) in [(0, 0), (0, WIDTH - 1), (HEIGHT - 1, 0), (HEIGHT - 1, WIDTH - 1)]:
-                return interact.Operation(h, w, "step")
-
         # 2. sort by number of unseen tiles around, less is better
         min_prob_positions = sorted(
             min_prob_positions,
-            key=lambda h_w: len(utils.look_around(h_w[0], h_w[1], self.context)["unseens"])
+            key=lambda hw: len(utils.look_around(hw[0], hw[1], self.context)["unseens"])
         )
 
         h, w = min_prob_positions[0]
@@ -287,9 +301,87 @@ class Engine(object):
             self.hold_on(f"Min prob position {(h, w)}: {min_prob}")
         return interact.Operation(h, w, "step")
 
+    def let_me_guess_v2(self, probs: Dict):
+        # only step, no flag
+        if not probs:
+            return self.random_step()
+
+        if len(self.context.front_side.unseens) > 12:
+            sorted_probs = sorted(list(probs.items()), key=lambda pos_prob: pos_prob[1])
+            min_prob_positions = []
+            min_prob = sorted_probs[0][1]
+            for position, prob in sorted_probs:
+                if math.isclose(prob, min_prob):
+                    min_prob_positions.append(position)
+
+            min_prob_positions = sorted(
+                min_prob_positions,
+                key=lambda hw: len(utils.look_around(hw[0], hw[1], self.context)["unseens"])
+            )
+
+            h, w = min_prob_positions[0]
+            if self.debug:
+                self.hold_on(f"Min prob position {(h, w)}: {min_prob}")
+            return interact.Operation(h, w, "step")
+        else:
+            def score_func(h, w, prob):
+                number_of_clear_tiles = self.num_clear_tiles_if_hw_is_safe(h, w)
+                score = (1. - prob) * math.pow(math.log(1. + number_of_clear_tiles), EXP)
+                return score
+
+            positions_scores = {(h, w): score_func(h, w, prob) for (h, w), prob in probs.items()}
+            sorted_scores = sorted(list(positions_scores.items()), key=lambda pos_score: pos_score[1], reverse=True)
+
+            (h, w), max_score = sorted_scores[0]
+            if self.debug:
+                self.hold_on(f"Max score position {(h, w)}: {max_score}")
+            return interact.Operation(h, w, "step")
+
+    def let_me_guess_v3(self, probs: Dict):
+        if not probs:
+            return self.random_step()
+
+        # only step, no flag
+        # 1. sort by probs
+        sorted_probs = sorted(list(probs.items()), key=lambda pos_prob: pos_prob[1])
+        min_prob_positions = []
+        min_prob = sorted_probs[0][1]
+        for position, prob in sorted_probs:
+            if math.isclose(prob, min_prob):
+                min_prob_positions.append(position)
+
+        # 2. sort by number of unseen tiles around, less is better
+        positions_n_unseens_around = [(unseen, len(utils.look_around(unseen[0], unseen[1], self.context)["unseens"]))
+                                      for unseen in min_prob_positions]
+        min_prob_positions = sorted(
+            positions_n_unseens_around,
+            key=lambda x: x[1],
+        )
+
+        least_unseens = positions_n_unseens_around[0][1]
+        candidates = []
+        for pos, n_unseens_around in positions_n_unseens_around:
+            if n_unseens_around == least_unseens:
+                candidates.append(pos)
+
+        # 3. sort by min manhattan distance to incomplete hints, closer is better.
+        incomplete_hints = list(utils.iter_incomplete_hints(self.context))
+        if len(incomplete_hints) == 0:
+            return interact.Operation(candidates[0][0], candidates[0][1], "step")
+
+        def min_manhattan_distance(hw, incomplete_hints):
+            return min([utils.manhattan_distance(hw, incomplete_hint) for incomplete_hint in incomplete_hints])
+
+        closest = min(candidates, key=lambda hw: min_manhattan_distance(hw, incomplete_hints))
+
+        h, w = closest
+        if self.debug:
+            self.hold_on(f"Min prob position {(h, w)}: {min_prob}")
+        return interact.Operation(h, w, "step")
+
     def hold_on(self, prefix=None):
         print(prefix)
-        msg = input('Input: (Press "save" to save the context, press "debug" to debug with pdb)')
+        msg = input('Input: (Press "save" to save the context, press "debug" to debug with pdb)\n')
         if msg.strip() == "save":
             self.context.save()
         elif msg.strip() == "debug":
@@ -324,3 +416,48 @@ class Engine(object):
                     counter.cnt = 1
             counters.append(counter)
         return counters
+
+    def num_clear_tiles_if_hw_is_safe(self, h, w):
+        pseudo_context = PseudoContext()
+        pseudo_context.pseudo_hints.add((h, w))
+
+        # _, indexing = self.group_incomplete_hints_into_disjoint_sets(return_indexing=True)
+        # connected_incomplete_hints = indexing[(h, w)]
+
+        clear_tiles_queue = deque([(h, w)])
+        visited_clear_tiles = set()
+
+        while clear_tiles_queue:
+            h, w = clear_tiles_queue.popleft()
+            visited_clear_tiles.add((h, w))
+            around_hints = list(utils.look_around(h, w, self.context, pseudo_context)["hints"])
+            for hint_h, hint_w in [*around_hints, (h, w)]:
+                # the hint could be pseudo hint or real hint
+                hint_around = utils.look_around(hint_h, hint_w, self.context, pseudo_context)
+                if self.context.front_side.type(hint_h, hint_w) == "HINT":
+                    # real hint
+                    if "pseudo_clears" in hint_around:
+                        if len(hint_around["unseens"]) == 1:
+                            # pseudo clear
+                            clear_h, clear_w = hint_around["unseens"].pop()
+                            pseudo_context.register(clear_h, clear_w, "pseudo_clear")
+                            clear_tiles_queue.append((clear_h, clear_w))
+                    else:
+                        if len(hint_around["unseens"]) == hint_around["remains"] > 0:
+                            # flag
+                            for flag_h, flag_w in hint_around["unseens"]:
+                                pseudo_context.register(flag_h, flag_w, "pseudo_flag")
+                                clear_tiles_queue.append((flag_h, flag_w))
+                        elif len(hint_around["unseens"]) > 0 and hint_around["remains"] == 0:
+                            # pseudo hint
+                            for pseudo_hint_h, pseudo_hint_w in hint_around["unseens"]:
+                                pseudo_context.register(pseudo_hint_h, pseudo_hint_w, "pseudo_hint")
+                                clear_tiles_queue.append((pseudo_hint_h, pseudo_hint_w))
+                else:
+                    # pseudo hint
+                    if len(hint_around["unseens"]) == 1:
+                        # cannot tell whether the around tile is flag or hint
+                        clear_h, clear_w = hint_around["unseens"].pop()
+                        pseudo_context.register(clear_h, clear_w, "pseudo_clear")
+                        clear_tiles_queue.append((clear_h, clear_w))
+        return len(visited_clear_tiles)

@@ -18,4 +18,6 @@ VERSION = "new"
 
 # The longest time (10 seconds for default) allowed in dfs function in LEVEL3 inference
 # When time runs out, dfs will be terminated.
-LEVEL3_THRESHOLD = 20
+LEVEL3_THRESHOLD = 100
+
+EXP = 0.1

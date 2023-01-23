@@ -25,6 +25,7 @@ context = minesweeper.initialize(first_step)
 # s = context.front_side.draw_board(lambda x: {UNSEEN: "[ ]", FLAG: "P"}.get(x, x))
 # print(s)
 
+# context.load(path="checkpoints/2023-01-17-16-53-51.pkl")
 context.load()
 s = context.front_side.draw_board(lambda x: {UNSEEN: "[ ]", FLAG: "P"}.get(x, x))
 # s = context.front_side.draw_board()
@@ -47,6 +48,7 @@ engine = Engine(context)
 ops = engine.what_next(mode="least")
 print(ops)
 
-# conclusion = engine.inference(level=6)
-# print(conclusion)
+
+# num_clear_tiles = engine.num_clear_tiles_if_hw_is_safe(14, 16)
+# print(num_clear_tiles)
 pass

@@ -19,7 +19,7 @@ for i in range(1, cnt + 1):
 
     while not context.is_over and not context.is_win:
         try:
-            ops = engine.what_next()
+            ops = engine.what_next(mode="most")
         except (ValueError, ZeroDivisionError, KeyboardInterrupt):
             engine.hold_on()
             break
