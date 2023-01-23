@@ -1,12 +1,13 @@
 # Auto-minesweeper
 
-终端可视化扫雷:
+终端可视化扫雷（建议在windows终端运行，因为可视化会用到emoji，而windows终端对emoji支持得比较好）:
 
 ```bash
 python main.py
 ```
 
 利用复刻的终端扫雷模拟胜率：
+Note that: 可以在 global_variables.py 中修改VERSION变量 （"old" 或者 "new"）来选择老版还是新版（默认新版）。
 
 ```bash
 python chance_of_winning.py
@@ -40,7 +41,7 @@ chance_of_winning.py: 利用自己写的终端扫雷模拟胜率
 
 xp_auto_play.py: 与winmine.exe交互完成扫雷
 
-global_variables.py: 一些全局设置
+global_variables.py: 一些全局设置（如：界面大小（默认30 x 16），地雷数量（默认99），新老版本（默认新版））
 
 ## 如何完成推理
 
